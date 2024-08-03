@@ -3,22 +3,34 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define WIN_WIDTH 1000 
-#define WIN_HEIGHT 720 
-#define MAX_ITER 30 
+# define WIN_WIDTH 1000 
+# define WIN_HEIGHT 720 
+# define MAX_ITER 30 
 
-#define MANDELBROT 1
-#define JULIA 2
+# define MANDELBROT 1
+# define JULIA 2
 
-#define CLOSE_WIN 17 
+# define CLOSE_WIN 17 
+# define KEY_W 119
+# define KEY_A 97
+# define KEY_S 115
+# define KEY_D 100
+# define KEY_UP 65362
+# define KEY_DOWN 65364
+# define KEY_LEFT 65361
+# define KEY_RIGHT 65363
+# define KEY_PLUS 61
+# define KEY_MINUS 45
+# define KEY_ESC 65307
 
-#define UP 111
-#define DOWN 222 
-#define RIGHT 333
-#define LEFT 444 
 
-// step 1: Create a function that iterates over every pixel represented as "c" and calculates if it belongs to the fractal set
-// step 2: Color the pixel with black if it belongs to the set and color the ot
+// revise xlib hooks
+// revise the complex layout
+// revise the put pixel function (how the image is better performance than the put pixel function)
+// add another fractal
+// make the color switch
+// make the program takes inputs
+// add a Makefile 
 
 typedef struct s_img {
 	void *mlx_img;
@@ -35,12 +47,12 @@ typedef struct s_layout {
 	double max_r;
 } t_layout;
 
-typedef struct s_color {
-	unsigned char a;
-	unsigned char r;
-	unsigned char g;
-	unsigned char b;
-} t_color;
+//typedef struct s_color {
+//	unsigned char a;
+//	unsigned char r;
+//	unsigned char g;
+//	unsigned char b;
+//} t_color;
 
 typedef struct s_fractal {
 	int type;
@@ -50,8 +62,6 @@ typedef struct s_fractal {
 	t_img img;
 } t_fractal;
 	
-
-
 void put_pixel(t_img *img, int x, int y, unsigned int color)
 {
 	char *pixel = img->addr + (img->line_len * y + x * (img->bpp / 8));
@@ -110,8 +120,11 @@ unsigned int get_color(int n, int MaxIterations) {
 		g = (unsigned char)(255 * t);
 		b = (unsigned char)(255 * t);
 	}
-	return (unsigned int)((a << 24) | (r << 16) | (g << 8) | b);
-}
+	a = 0;
+	r += 23;
+	g += 23;
+	b += 25;
+	return (unsigned int)((r << 24) | (a << 16) | (g << 8) | b); }
 
 void render(t_img *img, t_layout layout, int fractal)
 {
@@ -185,47 +198,87 @@ void	zoom(t_layout *layout, double zoom)
 	layout->max_i = layout->min_i + zoom * center_i;
 }	
 
-void move(t_layout *layout, double distance, int direction)
+void move(t_layout *layout, double distance, int keycode)
 {
 	double	center_r;
 	double	center_i;
 
 	center_r = layout->max_r - layout->min_r;
 	center_i = layout->max_i - layout->min_i;
-	if (direction == UP)
+	if (keycode == KEY_UP || keycode == KEY_W)
 	{
 		layout->min_i += center_i * distance;
 		layout->max_i += center_i * distance;
 	}
-	else if (direction == DOWN)
+	else if (keycode == KEY_DOWN || keycode == KEY_S)
 	{
 		layout->min_i -= center_i * distance;
 		layout->max_i -= center_i * distance;
 	}
-	else if (direction == RIGHT)
+	else if (keycode == KEY_RIGHT || keycode == KEY_D)
 	{
 		layout->min_r += center_r * distance;
 		layout->max_r += center_r * distance;
 	}
-	else if (direction == LEFT)
+	else if (keycode == KEY_LEFT || keycode == KEY_A)
 	{
 		layout->min_r -= center_r * distance;
 		layout->max_r -= center_r * distance;
 	}
 }
-	
-	
 
 int mouse_handler(int keycode, int x, int y, t_fractal *fractal)
 {
 	if (keycode == 4)
+	{
+		x -= WIN_WIDTH / 2;
+		y -= WIN_HEIGHT / 2;
+		if (y < 0)
+			move(&fractal->layout, (double)y * -1 / WIN_HEIGHT, KEY_UP);
+		else if (y > 0)
+			move (&fractal->layout, (double)y / WIN_HEIGHT, KEY_DOWN);
+		if (x < 0)
+			move(&fractal->layout, (double)x * -1 / WIN_WIDTH, KEY_LEFT);
+		else if (x > 0)
+			move(&fractal->layout, (double)x / WIN_WIDTH, KEY_RIGHT);
 		zoom(&(fractal->layout), 0.5);
+	}
 	if (keycode == 5)
 		zoom(&(fractal->layout), 2);
 	printf("zoom %lf\n", fractal->layout.max_r);
 	render2(*fractal);
 	return (0);
 }
+
+int	key_handler(int keycode, t_fractal *fractal)
+{
+	if (keycode == KEY_ESC)
+	{
+		//end_fractol(mlx);
+		return (0);
+	}
+	else if (keycode == KEY_PLUS)
+		zoom(&fractal->layout, 0.5);
+	else if (keycode == KEY_MINUS)
+		zoom(&fractal->layout, 2);
+	else if (keycode == KEY_UP || keycode == KEY_W)
+		move(&fractal->layout, 0.2, keycode);
+	else if (keycode == KEY_DOWN || keycode == KEY_S)
+		move(&fractal->layout, 0.2, keycode);
+	else if (keycode == KEY_LEFT || keycode == KEY_A)
+		move(&fractal->layout, 0.2, keycode);
+	else if (keycode == KEY_RIGHT || keycode == KEY_D)
+		move(&fractal->layout, 0.2, keycode);
+	//else if (keycode == KEY_SPACE)
+		//color_shift(&fractal->layout);
+	//else if (!key_event_extend(keycode, &fractal->layout))
+		//return (1);
+	else
+		return (1);
+	render2(*fractal);
+	return (0);
+}
+
 int main()
 {
 
@@ -253,7 +306,7 @@ int main()
 	render2(fractal);
 	mlx_hook(fractal.mlx_win, CLOSE_WIN, 0, mlx_loop_end, fractal.mlx_ptr);
 	mlx_mouse_hook(fractal.mlx_win, mouse_handler, &fractal);
-	mlx_
+	mlx_key_hook(fractal.mlx_win, key_handler, &fractal);
 	mlx_loop(fractal.mlx_ptr);
 	mlx_destroy_image(fractal.mlx_ptr, fractal.img.mlx_img);
 	mlx_destroy_window(fractal.mlx_ptr, fractal.mlx_win);
