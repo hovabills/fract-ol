@@ -2,13 +2,16 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+#include <string.h>
 
-# define WIN_WIDTH 1000 
-# define WIN_HEIGHT 720 
+# define WIN_WIDTH 1800 
+# define WIN_HEIGHT 1100 
 # define MAX_ITER 30 
 
 # define MANDELBROT 1
 # define JULIA 2
+# define BURNINGSHIP 3
 
 # define CLOSE_WIN 17 
 # define KEY_W 119
@@ -24,12 +27,7 @@
 # define KEY_ESC 65307
 
 
-// revise xlib hooks
-// revise the complex layout
-// revise the put pixel function (how the image is better performance than the put pixel function)
-// add another fractal
 // make the color switch
-// make the program takes inputs
 // add a Makefile 
 
 typedef struct s_img {
@@ -59,6 +57,8 @@ typedef struct s_fractal {
 	t_layout layout;
 	void *mlx_ptr;
 	void *mlx_win;
+	float julia_zr;
+	float julia_zi;
 	t_img img;
 } t_fractal;
 	
@@ -102,7 +102,31 @@ int julia(double zr, double zi, double kr, double ki)
 	}
 	return (n);
 }
-	
+
+int	burningship(double cr, double ci)
+{
+	int		n;
+	double	zr;
+	double	zi;
+	double	tmp;
+
+	zr = 0;
+	zi = 0;
+	n = 0;
+	while (n < MAX_ITER)
+	{
+		if ((zr * zr + zi * zi) > 4.0)
+			break ;
+		zr = fabs(zr);
+		zi = fabs(zi) * -1;
+		tmp = 2 * zr * zi + ci;
+		zr = zr * zr - zi * zi + cr;
+		zi = tmp;
+		n++;
+	}
+	return (n);
+}	
+
 unsigned int get_color(int n, int MaxIterations) {
 	unsigned char r, g, b, a;
 
@@ -111,51 +135,20 @@ unsigned int get_color(int n, int MaxIterations) {
 
 	if (n < halfIterations) {
 		float t = (float)n / (halfIterations - 1);
-		r = (unsigned char)(255 * t);
-		g = 0;
+		g = (unsigned char)(255 * t);
+		r = 0;
 		b = 0;
 	} else {
 		float t = (float)(n - halfIterations) / (MaxIterations - halfIterations - 1);
-		r = 255;
-		g = (unsigned char)(255 * t);
+		g = 255;
+		r = (unsigned char)(255 * t);
 		b = (unsigned char)(255 * t);
 	}
-	a = 0;
-	r += 23;
-	g += 23;
-	b += 25;
-	return (unsigned int)((r << 24) | (a << 16) | (g << 8) | b); }
-
-void render(t_img *img, t_layout layout, int fractal)
-{
-	int x = 0;
-	int y = 0;
-	double cr;
-	double ci;
-	int n;
-	while (x < WIN_WIDTH)
-	{	
-		cr = layout.min_r + x * ((layout.max_r - layout.min_r) / (WIN_WIDTH - 1));
-		while (y < WIN_HEIGHT)
-		{
-			ci = layout.max_i - y * ((layout.max_i - layout.min_i) / (WIN_HEIGHT - 1));
-			if (fractal == MANDELBROT)
-				n = mandelbrot(cr, ci);
-			else if (fractal == JULIA)
-				n = julia(cr, ci, -0.8, 0.156);
-			if (n == MAX_ITER)
-				put_pixel(img, x, y, 0xFF000000);
-			else 
-				put_pixel(img, x, y, get_color(n, MAX_ITER));
-			
-			y++;
-		}
-		x++;
-		y = 0;
-	}
+	return (unsigned int)((a << 24) | (r << 16) | (g << 8) | b); 
 }
 
-void render2(t_fractal fractal)
+
+void render(t_fractal fractal)
 {
 	int x = 0;
 	int y = 0;
@@ -171,7 +164,9 @@ void render2(t_fractal fractal)
 			if (fractal.type == MANDELBROT)
 				n = mandelbrot(cr, ci);
 			else if (fractal.type == JULIA)
-				n = julia(cr, ci, 0.285, 0.01);
+				n = julia(cr, ci, -0.4, -0.59);
+			else if (fractal.type == BURNINGSHIP)
+				n = burningship(cr, ci);
 			if (n == MAX_ITER)
 				put_pixel(&fractal.img, x, y, 0xFF000000);
 			else 
@@ -245,8 +240,7 @@ int mouse_handler(int keycode, int x, int y, t_fractal *fractal)
 	}
 	if (keycode == 5)
 		zoom(&(fractal->layout), 2);
-	printf("zoom %lf\n", fractal->layout.max_r);
-	render2(*fractal);
+	render(*fractal);
 	return (0);
 }
 
@@ -254,7 +248,7 @@ int	key_handler(int keycode, t_fractal *fractal)
 {
 	if (keycode == KEY_ESC)
 	{
-		//end_fractol(mlx);
+		mlx_loop_end(fractal->mlx_ptr);
 		return (0);
 	}
 	else if (keycode == KEY_PLUS)
@@ -275,24 +269,80 @@ int	key_handler(int keycode, t_fractal *fractal)
 		//return (1);
 	else
 		return (1);
-	render2(*fractal);
+	render(*fractal);
 	return (0);
 }
 
-int main()
-{
 
+int ft_strcmp(char *s1, char *s2)
+{
+	while(*s1 && *s2 && *s1 == *s2)
+	{
+		s1++;
+		s2++;
+	}
+	return (*s1 - *s2);
+}
+	
+
+void write_usage()
+{	
+	write (1, "Usage: fractol [OPTION] [JULIA PARAMS]\n\n", 40);
+	write (1, "{OPTION}:\n", 10);
+	write (1, "	M - Mandelbrot\n", 17);
+	write (1, "	J - Julia\n", 12);
+	write (1, "	B - Burning Ship\n", 19);
+}
+	
+int set_fractal_type(int ac, char **av, t_fractal *fractal)
+{	
+	if (ac < 2)
+		return (write_usage(), 1);
+	av++;
+	if (!ft_strcmp(*av, "M"))
+	{
+		fractal->type = MANDELBROT;
+		return (0);
+	}
+	if (!ft_strcmp(*av, "J"))
+	{
+		fractal->type = JULIA;
+		return (0);
+	}
+	if (!ft_strcmp(*av, "B"))
+	{
+		fractal->type = BURNINGSHIP;
+		return (0);
+	}
+	return (write_usage(), 1);
+}
+
+void set_fractal_layout(t_fractal *fractal)
+{
+	fractal->layout.min_r = -2.0;
+	fractal->layout.max_r = 2.0;
+	fractal->layout.min_i = -2.0;
+	fractal->layout.max_i = fractal->layout.min_i + (fractal->layout.max_r - fractal->layout.min_r) * WIN_HEIGHT / WIN_WIDTH;
+}
+	
+int set_julia_params(t_fractal *fractal)
+{
+	// TODO: handle julia params 
+	return (0);
+}
+
+int main(int ac, char **av)
+{
 	t_fractal fractal;
 
-	fractal.type = JULIA; 
-	fractal.layout.min_r = -2.0;
-	fractal.layout.max_r = 2.0;
-	fractal.layout.min_i = -2.0;
-	fractal.layout.max_i = fractal.layout.min_i + (fractal.layout.max_r - fractal.layout.min_r) * WIN_HEIGHT / WIN_WIDTH;
-
+	if (set_fractal_type(ac, av, &fractal))
+		return (1);
+	if (set_julia_params(&fractal))
+		return (1);
+	set_fractal_layout(&fractal);
 	fractal.mlx_ptr = mlx_init();
 	if (!fractal.mlx_ptr)
-		return (0);
+		return (1);
 	fractal.mlx_win = mlx_new_window(fractal.mlx_ptr, WIN_WIDTH, WIN_HEIGHT, "fract-ol");
 	if (!fractal.mlx_win)
 	{
@@ -302,8 +352,7 @@ int main()
 	}
 	fractal.img.mlx_img = mlx_new_image(fractal.mlx_ptr, WIN_WIDTH, WIN_HEIGHT);
 	fractal.img.addr = mlx_get_data_addr(fractal.img.mlx_img, &fractal.img.bpp, &fractal.img.line_len, &fractal.img.endian);
-	//render(&fractal.img, fractal.layout, fractal.type);
-	render2(fractal);
+	render(fractal);
 	mlx_hook(fractal.mlx_win, CLOSE_WIN, 0, mlx_loop_end, fractal.mlx_ptr);
 	mlx_mouse_hook(fractal.mlx_win, mouse_handler, &fractal);
 	mlx_key_hook(fractal.mlx_win, key_handler, &fractal);
@@ -312,4 +361,5 @@ int main()
 	mlx_destroy_window(fractal.mlx_ptr, fractal.mlx_win);
 	mlx_destroy_display(fractal.mlx_ptr);
 	free(fractal.mlx_ptr);
+	return (0);
 }
